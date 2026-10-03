@@ -52,3 +52,7 @@ create policy "leer cartones" on cards for select using (true);
 -- Tiempo real
 alter publication supabase_realtime add table rooms;
 alter publication supabase_realtime add table players;
+
+-- v2: segundo premio
+alter table rooms add column if not exists pattern2 text;
+alter table rooms add column if not exists stage int not null default 1;

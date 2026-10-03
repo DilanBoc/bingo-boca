@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import { useRoom } from '@/lib/useRoom';
 import { supabase } from '@/lib/supabaseClient';
-import { LETTERS, PATTERNS } from '@/lib/bingo';
+import { LETTERS, PATTERNS, activePattern, hasSecondPrize, stageLabel } from '@/lib/bingo';
 import { Ball, PatternMini } from '@/lib/ui';
 import { callNumber, rattle, speak } from '@/lib/voice';
 
@@ -17,7 +17,7 @@ export default function Host() {
   const [reveal, setReveal] = useState(0);
   const [err, setErr] = useState('');
   const [origin, setOrigin] = useState('');
-  const announced = useRef('');
+  const announced = useRef(null);
   const claimSeen = useRef(0);
 
   useEffect(() => {
@@ -25,27 +25,38 @@ export default function Host() {
     setOrigin(window.location.origin);
   }, [code]);
 
-  // Lista de jugadores (se refresca sola)
+  // Jugadores con su número de cartones
   useEffect(() => {
     if (!room?.id) return;
-    const load = () => supabase().from('players').select('id, name').eq('room_id', room.id)
-      .order('created_at').then(({ data }) => data && setPlayers(data));
+    const load = () => supabase().from('players').select('id, name, cards(count)').eq('room_id', room.id)
+      .order('created_at').then(({ data }) => data && setPlayers(
+        data.map((p) => ({ id: p.id, name: p.name, cards: p.cards?.[0]?.count || 0 }))));
     load();
     const t = setInterval(load, 6000);
     const ch = supabase().channel('players-' + room.id)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'players', filter: `room_id=eq.${room.id}` }, load)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'players', filter: `room_id=eq.${room.id}` }, () => setTimeout(load, 800))
       .subscribe();
     return () => { clearInterval(t); supabase().removeChannel(ch); };
   }, [room?.id]);
 
-  // Anunciar ganador y bingos falsos con voz
+  // Anunciar ganadores nuevos y bingos falsos con voz
   useEffect(() => {
     if (!room) return;
-    const key = room.round + ':' + room.winners.map((w) => w.cardId).join(',');
-    if (room.winners.length && announced.current !== key) {
+    const key = room.round + ':' + room.winners.length;
+    if (announced.current === null) { announced.current = key; }
+    else if (announced.current !== key) {
+      const prevCount = announced.current.split(':')[0] == room.round ? +announced.current.split(':')[1] : 0;
       announced.current = key;
-      const names = room.winners.map((w) => `${w.name} con el cartón ${w.numero}`).join(' y ');
-      setTimeout(() => speak(`¡Bingo! Ganó ${names}`), 1800);
+      const fresh = room.winners.slice(prevCount);
+      if (fresh.length) {
+        const byStage = {};
+        fresh.forEach((w) => (byStage[w.stage] ||= []).push(`${w.name} con el cartón ${w.numero}`));
+        const text = Object.entries(byStage).map(([s, names]) =>
+          `¡${stageLabel(room, +s)}! Ganó ${names.join(' y ')}`).join('. ');
+        const next = room.status !== 'finished' && hasSecondPrize(room)
+          ? `. Seguimos jugando por ${PATTERNS[room.pattern2].label}` : '';
+        setTimeout(() => speak(text + next), 1800);
+      }
     }
     if (room.last_claim && !room.last_claim.valid && room.last_claim.at > claimSeen.current) {
       claimSeen.current = room.last_claim.at;
@@ -68,8 +79,7 @@ export default function Host() {
     const [d] = await Promise.all([post('/api/draw', {}), new Promise((r) => setTimeout(r, 1500))]);
     setSpinning(false);
     if (d) {
-      setRoom((prev) => prev && ({ ...prev, drawn: [...prev.drawn, d.number], drawn_count: prev.drawn_count + 1,
-        status: d.winners.length ? 'finished' : 'playing', winners: d.winners }));
+      setRoom(d.room);
       setReveal((x) => x + 1);
       callNumber(d.number);
     }
@@ -87,7 +97,11 @@ export default function Host() {
   const last = room.drawn[room.drawn.length - 1];
   const drawnSet = new Set(room.drawn);
   const joinUrl = `${origin}/sala/${room.code}`;
-  const canPickPattern = room.drawn_count === 0;
+  const canPick = room.drawn_count === 0;
+  const second = hasSecondPrize(room);
+  const finished = room.status === 'finished';
+  const totalCards = players.reduce((s, p) => s + p.cards, 0);
+  const winnersOf = (s) => room.winners.filter((w) => (w.stage || 1) === s);
 
   return (
     <main className="wrap" style={{ display: 'grid', gap: 28 }}>
@@ -95,7 +109,9 @@ export default function Host() {
         <div>
           <p className="muted" style={{ margin: 0 }}>Sala</p>
           <h1 style={{ fontSize: 48, lineHeight: 1 }}>{room.code}</h1>
-          <p className="muted" style={{ margin: '6px 0 0' }}>{players.length} {players.length === 1 ? 'jugador' : 'jugadores'} · ronda {room.round}</p>
+          <p className="muted" style={{ margin: '6px 0 0' }}>
+            {players.length} {players.length === 1 ? 'jugador' : 'jugadores'} · {totalCards} {totalCards === 1 ? 'cartón' : 'cartones'} · ronda {room.round}
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
           <div style={{ background: '#fff', padding: 10, borderRadius: 12 }}>
@@ -106,14 +122,21 @@ export default function Host() {
       </header>
 
       {room.winners.length > 0 && (
-        <div className="banner">
-          <h2>¡Bingo!</h2>
-          {room.winners.map((w) => <p key={w.cardId} style={{ margin: 4, fontWeight: 800, fontSize: 20 }}>{w.name}, cartón {w.numero}</p>)}
-          <button className="btn" style={{ marginTop: 10, background: 'var(--ink)', color: 'var(--chalk)' }}
-            onClick={() => settings({ reset: true })}>Empezar ronda nueva</button>
+        <div className={finished ? 'banner' : 'banner soft'}>
+          {[1, 2].filter((s) => winnersOf(s).length).map((s) => (
+            <div key={s} style={{ marginBottom: 6 }}>
+              <h2 style={{ fontSize: finished ? undefined : 30 }}>¡{stageLabel(room, s)}!</h2>
+              {winnersOf(s).map((w) => <p key={w.cardId + s} style={{ margin: 2, fontWeight: 800, fontSize: 20 }}>{w.name}, cartón {w.numero} · {PATTERNS[w.pattern || room.pattern]?.label}</p>)}
+            </div>
+          ))}
+          {!finished && second && <p style={{ margin: '6px 0 0', fontWeight: 800 }}>Seguimos: ahora se juega por {PATTERNS[room.pattern2].label}</p>}
+          {finished && (
+            <button className="btn" style={{ marginTop: 10, background: 'var(--ink)', color: 'var(--chalk)' }}
+              onClick={() => settings({ reset: true })}>Empezar ronda nueva</button>
+          )}
         </div>
       )}
-      {room.last_claim && !room.last_claim.valid && room.status !== 'finished' && (
+      {room.last_claim && !room.last_claim.valid && !finished && (
         <p className="err" style={{ margin: 0 }}>{room.last_claim.name} cantó bingo con el cartón {room.last_claim.numero}, pero aún no lo completa.</p>
       )}
 
@@ -122,25 +145,46 @@ export default function Host() {
           <div key={reveal} className={`drum ${spinning ? 'spinning' : reveal ? 'reveal' : ''}`}>
             <Ball n={spinning ? null : last} size={220} />
           </div>
-          <button className="btn big" onClick={spin} disabled={spinning || room.status === 'finished' || room.drawn_count >= 75}>
+          <button className="btn big" onClick={spin} disabled={spinning || finished || room.drawn_count >= 75}>
             {spinning ? 'Girando…' : 'Girar balotera'}
           </button>
           {last && !spinning && <button className="btn ghost" onClick={() => callNumber(last)}>Repetir número</button>}
-          <p className="muted" style={{ margin: 0 }}>{room.drawn_count} de 75 balotas</p>
+          <p className="muted" style={{ margin: 0 }}>
+            {room.drawn_count} de 75 balotas · jugando por <b style={{ color: 'var(--chalk)' }}>{PATTERNS[activePattern(room)].label}</b>
+          </p>
           {err && <p className="err" style={{ margin: 0 }}>{err}</p>}
         </div>
 
         <div style={{ display: 'grid', gap: 16 }}>
           <label className="field">
-            <span>Cómo se gana</span>
+            <span>{second ? 'Primer premio' : 'Cómo se gana'}</span>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <select value={room.pattern} disabled={!canPickPattern} onChange={(e) => settings({ pattern: e.target.value })} style={{ flex: 1 }}>
+              <select value={room.pattern} disabled={!canPick} onChange={(e) => settings({ pattern: e.target.value })} style={{ flex: 1 }}>
                 {Object.entries(PATTERNS).map(([k, p]) => <option key={k} value={k}>{p.label}</option>)}
               </select>
               <PatternMini k={room.pattern} />
             </div>
-            {!canPickPattern && <span className="muted" style={{ fontSize: 14 }}>Se puede cambiar al empezar una ronda nueva.</span>}
           </label>
+
+          <label style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <input type="checkbox" checked={!!second} disabled={!canPick}
+              onChange={(e) => settings({ pattern2: e.target.checked ? 'lleno' : null })} style={{ width: 22, height: 22 }} />
+            <span>Jugar también un segundo premio</span>
+          </label>
+
+          {second && (
+            <label className="field">
+              <span>Segundo premio</span>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <select value={room.pattern2} disabled={!canPick} onChange={(e) => settings({ pattern2: e.target.value })} style={{ flex: 1 }}>
+                  {Object.entries(PATTERNS).map(([k, p]) => <option key={k} value={k}>{p.label}</option>)}
+                </select>
+                <PatternMini k={room.pattern2} />
+              </div>
+            </label>
+          )}
+          {!canPick && <span className="muted" style={{ fontSize: 14, marginTop: -8 }}>Los premios se cambian al empezar una ronda nueva.</span>}
+
           <label style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <input type="checkbox" checked={room.auto_check} onChange={(e) => settings({ autoCheck: e.target.checked })}
               style={{ width: 22, height: 22 }} />
@@ -152,10 +196,26 @@ export default function Host() {
               Reiniciar ronda
             </button>
           )}
-          {players.length > 0 && (
-            <p className="muted" style={{ margin: 0, fontSize: 15 }}>En la sala: {players.map((p) => p.name).join(', ')}</p>
-          )}
         </div>
+      </section>
+
+      <section className="players" aria-label="Jugadores en la sala">
+        <h2 style={{ fontSize: 22, marginBottom: 10 }}>Jugadores</h2>
+        {players.length === 0 ? (
+          <p className="muted" style={{ margin: 0 }}>Todavía no entra nadie. Muestra el QR para que se unan.</p>
+        ) : (
+          <ul>
+            {players.map((p) => {
+              const won = room.winners.filter((w) => w.playerId === p.id);
+              return (
+                <li key={p.id}>
+                  <span className="pname">{p.name}{won.length > 0 && <span className="trophy" title="Ganó"> 🏆</span>}</span>
+                  <span className="pcount">{p.cards} {p.cards === 1 ? 'cartón' : 'cartones'}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
       <section className="board" aria-label="Balotas que han salido">

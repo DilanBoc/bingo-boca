@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useRoom } from '@/lib/useRoom';
 import { supabase } from '@/lib/supabaseClient';
-import { LETTERS, PATTERNS, previewCells } from '@/lib/bingo';
+import { LETTERS, PATTERNS, previewCells, activePattern, hasSecondPrize, stageLabel } from '@/lib/bingo';
 import { Ball, PatternMini } from '@/lib/ui';
 import { callNumber } from '@/lib/voice';
 
@@ -25,7 +25,8 @@ function useMarks(cardId, round) {
 function Card({ card, room, auto, onClaim }) {
   const [marks, toggle] = useMarks(card.id, room.round);
   const drawn = new Set(room.drawn);
-  const target = previewCells(room.pattern);
+  const pat = activePattern(room);
+  const target = previewCells(pat);
   return (
     <div className="card">
       <div className="card-head"><span>Cartón {card.numero}</span></div>
@@ -35,7 +36,7 @@ function Card({ card, room, auto, onClaim }) {
           if (n === 0) return <div key={i} className="sq free marked" style={{ display: 'grid', placeItems: 'center' }}>LIBRE</div>;
           const on = auto ? drawn.has(n) : marks.has(n);
           return (
-            <button key={i} className={`sq ${on ? 'marked' : ''} ${target.has(i) && room.pattern !== 'lleno' ? 'target' : ''}`}
+            <button key={i} className={`sq ${on ? 'marked' : ''} ${target.has(i) && pat !== 'lleno' ? 'target' : ''}`}
               onClick={() => !auto && toggle(n)} aria-pressed={on} aria-label={`${n}${on ? ', marcado' : ''}`}>
               {n}
             </button>
@@ -135,6 +136,9 @@ export default function Sala() {
   }
 
   const me = room.winners.filter((w) => w.playerId === playerId);
+  const pat = activePattern(room);
+  const finished = room.status === 'finished';
+  const second = hasSecondPrize(room);
   return (
     <main className="wrap" style={{ display: 'grid', gap: 18, maxWidth: 560 }}>
       <header style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
@@ -145,17 +149,29 @@ export default function Sala() {
             {room.drawn.slice(-6, -1).reverse().join('  ') || `Sala ${room.code}`}
           </p>
         </div>
-        <div style={{ display: 'grid', justifyItems: 'center', gap: 4 }} title={PATTERNS[room.pattern].label}>
-          <PatternMini k={room.pattern} />
-          <span className="muted" style={{ fontSize: 13 }}>{PATTERNS[room.pattern].label}</span>
+        <div style={{ display: 'grid', justifyItems: 'center', gap: 4 }} title={PATTERNS[pat].label}>
+          <PatternMini k={pat} />
+          <span className="muted" style={{ fontSize: 13, textAlign: 'center' }}>
+            {second && !finished ? `${room.stage === 2 ? '2º' : '1º'} premio: ` : ''}{PATTERNS[pat].label}
+          </span>
         </div>
       </header>
 
       {room.winners.length > 0 && (
-        <div className="banner">
-          <h2>{me.length ? '¡Ganaste!' : '¡Bingo!'}</h2>
-          <p style={{ margin: 4, fontWeight: 800 }}>{room.winners.map((w) => `${w.name}, cartón ${w.numero}`).join(' · ')}</p>
-          <p style={{ margin: 0 }}>Espera a que empiece la ronda nueva.</p>
+        <div className={finished ? 'banner' : 'banner soft'}>
+          {me.length > 0 && <h2>¡Ganaste!</h2>}
+          {[1, 2].map((s) => {
+            const ws = room.winners.filter((w) => (w.stage || 1) === s);
+            if (!ws.length) return null;
+            return (
+              <p key={s} style={{ margin: 4, fontWeight: 800 }}>
+                {stageLabel(room, s)}: {ws.map((w) => `${w.name}, cartón ${w.numero}`).join(' · ')}
+              </p>
+            );
+          })}
+          <p style={{ margin: 0 }}>
+            {finished ? 'Espera a que empiece la ronda nueva.' : `¡Sigue jugando! Ahora vamos por ${PATTERNS[pat].label}.`}
+          </p>
         </div>
       )}
 
