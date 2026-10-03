@@ -56,3 +56,7 @@ alter publication supabase_realtime add table players;
 -- v2: segundo premio
 alter table rooms add column if not exists pattern2 text;
 alter table rooms add column if not exists stage int not null default 1;
+
+-- v3: limpieza automática de salas (ver migración limpieza_salas en Supabase)
+-- last_activity + triggers + cleanup_rooms() programada con pg_cron cada 15 min:
+--   cerradas: 10 min · terminadas: 2 h · cualquier sala inactiva: 12 h

@@ -3,11 +3,17 @@ import { PATTERNS } from '@/lib/bingo';
 
 export async function POST(req) {
   const body = await req.json();
-  const { code, secret, pattern, pattern2, autoCheck, reset } = body;
+  const { code, secret, pattern, pattern2, autoCheck, reset, close } = body;
   const db = admin();
   const room = await getRoom(db, code);
   if (!room) return json({ error: 'Sala no encontrada.' }, 404);
   if (!(await isHost(db, room.id, secret))) return json({ error: 'Solo el anfitrión cambia esto.' }, 403);
+
+  if (close) {
+    const { data } = await db.from('rooms').update({ status: 'closed' }).eq('id', room.id).select().single();
+    return json({ room: data });
+  }
+  if (room.status === 'closed') return json({ error: 'Este bingo ya terminó.' }, 409);
 
   const changingPrizes = pattern !== undefined || 'pattern2' in body;
   if (changingPrizes && room.drawn_count > 0 && !reset)

@@ -92,6 +92,13 @@ export default function Host() {
 
   if (missing) return <main className="wrap"><h1>Esta sala no existe</h1><p className="muted">Vuelve al inicio y crea una nueva.</p></main>;
   if (!room || secret === null) return <main className="wrap"><p className="muted">Cargando sala…</p></main>;
+  if (room.status === 'closed') return (
+    <main className="wrap" style={{ display: 'grid', gap: 18, justifyItems: 'center', textAlign: 'center', paddingTop: 60 }}>
+      <h1 style={{ fontSize: 44 }}>Bingo terminado</h1>
+      <p className="muted" style={{ maxWidth: 420 }}>La sala {room.code} se cerró y sus datos se borran en unos minutos. ¡Gracias por jugar!</p>
+      <a className="btn big" href="/" style={{ textDecoration: 'none' }}>Crear otra sala</a>
+    </main>
+  );
   if (!secret) return <main className="wrap"><h1>Esta sala es de otro anfitrión</h1><p className="muted">Para jugar, entra como jugador en /sala/{room.code}.</p></main>;
 
   const last = room.drawn[room.drawn.length - 1];
@@ -145,13 +152,14 @@ export default function Host() {
           <div key={reveal} className={`drum ${spinning ? 'spinning' : reveal ? 'reveal' : ''}`}>
             <Ball n={spinning ? null : last} size={220} />
           </div>
-          <button className="btn big" onClick={spin} disabled={spinning || finished || room.drawn_count >= 75}>
+          <button className="btn big" onClick={spin} disabled={spinning || finished || room.drawn_count >= 75 || totalCards === 0}>
             {spinning ? 'Girando…' : 'Girar balotera'}
           </button>
           {last && !spinning && <button className="btn ghost" onClick={() => callNumber(last)}>Repetir número</button>}
           <p className="muted" style={{ margin: 0 }}>
             {room.drawn_count} de 75 balotas · jugando por <b style={{ color: 'var(--chalk)' }}>{PATTERNS[activePattern(room)].label}</b>
           </p>
+          {totalCards === 0 && <p className="muted" style={{ margin: 0, fontSize: 15 }}>La balotera se activa cuando haya al menos un cartón en juego.</p>}
           {err && <p className="err" style={{ margin: 0 }}>{err}</p>}
         </div>
 
@@ -190,12 +198,18 @@ export default function Host() {
               style={{ width: 22, height: 22 }} />
             <span>Detectar ganador automáticamente <span className="muted">(si lo apagas, gana quien cante ¡Bingo! y el sistema lo verifica)</span></span>
           </label>
-          {room.status === 'playing' && (
-            <button className="btn ghost" style={{ justifySelf: 'start' }}
-              onClick={() => confirm('¿Reiniciar la ronda? Se borran las balotas que han salido.') && settings({ reset: true })}>
-              Reiniciar ronda
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {room.status === 'playing' && (
+              <button className="btn ghost"
+                onClick={() => confirm('¿Reiniciar la ronda? Se borran las balotas que han salido.') && settings({ reset: true })}>
+                Reiniciar ronda
+              </button>
+            )}
+            <button className="btn ghost danger"
+              onClick={() => confirm('¿Terminar el bingo? La sala se cierra para todos y se borran sus datos.') && settings({ close: true })}>
+              Terminar bingo
             </button>
-          )}
+          </div>
         </div>
       </section>
 

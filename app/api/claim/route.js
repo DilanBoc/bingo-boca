@@ -6,7 +6,7 @@ export async function POST(req) {
   const db = admin();
   const room = await getRoom(db, code);
   if (!room) return json({ error: 'Sala no encontrada.' }, 404);
-  if (room.status === 'finished') return json({ error: 'El juego ya terminó.' }, 409);
+  if (room.status === 'finished' || room.status === 'closed') return json({ error: 'El juego ya terminó.' }, 409);
 
   const { data: card } = await db.from('cards')
     .select('id, room_id, numero, grid, player_id, players(name)').eq('id', cardId).maybeSingle();

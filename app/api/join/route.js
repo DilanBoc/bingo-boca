@@ -11,6 +11,7 @@ export async function POST(req) {
   const db = admin();
   const room = await getRoom(db, code);
   if (!room) return json({ error: 'Esa sala no existe. Revisa el código.' }, 404);
+  if (room.status === 'closed') return json({ error: 'Este bingo ya terminó.' }, 409);
 
   const { data: player, error } = await db.from('players')
     .insert({ room_id: room.id, name: clean }).select().single();

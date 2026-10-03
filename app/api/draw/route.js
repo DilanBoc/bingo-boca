@@ -8,7 +8,11 @@ export async function POST(req) {
   const room = await getRoom(db, code);
   if (!room) return json({ error: 'Sala no encontrada.' }, 404);
   if (!(await isHost(db, room.id, secret))) return json({ error: 'Solo el anfitrión puede girar.' }, 403);
-  if (room.status === 'finished') return json({ error: 'El juego terminó. Empieza una ronda nueva.' }, 409);
+  if (room.status === 'closed') return json({ error: 'Este bingo ya terminó.' }, 409);
+  if (room.status === 'finished') return json({ error: 'La ronda terminó. Empieza una ronda nueva.' }, 409);
+
+  const { count } = await db.from('cards').select('id', { count: 'exact', head: true }).eq('room_id', room.id);
+  if (!count) return json({ error: 'Todavía no hay cartones en juego. Espera a que entre alguien.' }, 409);
 
   const used = new Set(room.drawn);
   const left = [];
@@ -19,7 +23,8 @@ export async function POST(req) {
   const drawn = [...room.drawn, number];
 
   let next = { stage: room.stage, winners: room.winners, finished: false };
-  if (room.auto_check) {
+  // Con la balota 75 todos los cartones están completos: se revisa siempre para que nunca quede sin ganador.
+  if (room.auto_check || drawn.length === 75) {
     const { data } = await db.from('cards')
       .select('id, numero, grid, player_id, players(name)').eq('room_id', room.id);
     const cards = (data || []).map((c) => ({

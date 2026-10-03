@@ -109,7 +109,13 @@ export default function Sala() {
     flash(d.valid ? '¡Bingo verificado!' : `Todavía no: al cartón ${card.numero} le faltan balotas.`);
   }
 
-  if (missing) return <main className="wrap"><h1>Esta sala no existe</h1><p className="muted">Revisa el código con quien está cantando.</p></main>;
+  if (missing) return <main className="wrap"><h1>Esta sala ya no existe</h1><p className="muted">El bingo terminó o el código no es correcto. Revisa con quien está cantando.</p></main>;
+  if (room?.status === 'closed') return (
+    <main className="wrap" style={{ display: 'grid', gap: 14, textAlign: 'center', paddingTop: 60 }}>
+      <h1 style={{ fontSize: 40 }}>El bingo terminó</h1>
+      <p className="muted">¡Gracias por jugar! El anfitrión cerró la sala {room.code}.</p>
+    </main>
+  );
   if (!room || playerId === undefined) return <main className="wrap"><p className="muted">Cargando…</p></main>;
 
   if (!playerId) {
