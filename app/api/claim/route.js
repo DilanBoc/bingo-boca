@@ -22,14 +22,23 @@ export async function POST(req) {
     return json({ valid });
   }
 
-  // Solo se acredita este cartón (quien cantó), y se revisa si también cerró la etapa 2.
+  // Solo se acredita este cartón; si otro bingo entró al mismo tiempo, se reintenta sobre el estado nuevo.
   const info = { cardId: card.id, numero: card.numero, playerId: card.player_id, name };
-  const next = resolveStages(room, room.drawn, [{ grid: card.grid, info }]);
-  await db.from('rooms').update({
-    stage: next.stage,
-    winners: next.winners,
-    status: next.finished ? 'finished' : 'playing',
-    last_claim: claim,
-  }).eq('id', room.id).eq('stage', room.stage);
+  let current = room;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (current.status === 'finished' || current.status === 'closed') break;
+    if (current.winners.some((w) => w.cardId === card.id && w.stage === (current.stage || 1))) break;
+    if (!isWinner(card.grid, current.drawn, activePattern(current))) break;
+    const next = resolveStages(current, current.drawn, [{ grid: card.grid, info }]);
+    const { data: ok } = await db.from('rooms').update({
+      stage: next.stage,
+      winners: next.winners,
+      status: next.finished ? 'finished' : 'playing',
+      last_claim: claim,
+    }).eq('id', room.id).eq('stage', current.stage).eq('status', current.status)
+      .eq('drawn_count', current.drawn_count).select('id').maybeSingle();
+    if (ok) break;
+    current = await getRoom(db, code);
+  }
   return json({ valid });
 }

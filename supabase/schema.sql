@@ -60,3 +60,7 @@ alter table rooms add column if not exists stage int not null default 1;
 -- v3: limpieza automática de salas (ver migración limpieza_salas en Supabase)
 -- last_activity + triggers + cleanup_rooms() programada con pg_cron cada 15 min:
 --   cerradas: 10 min · terminadas: 2 h · cualquier sala inactiva: 12 h
+
+-- v4: sin números ni cartones repetidos dentro de una sala
+create unique index if not exists cards_room_numero_uq on cards(room_id, numero);
+create unique index if not exists cards_room_grid_uq on cards(room_id, grid);

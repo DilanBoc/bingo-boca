@@ -97,6 +97,7 @@ export default function Sala() {
     const d = await r.json();
     setBusy(false);
     if (!r.ok) return setErr(d.error);
+    if (d.capped) flash(`Solo quedaban ${d.capped} cartones disponibles en esta sala.`);
     localStorage.setItem(storeKey, d.playerId);
     setCards(d.cards);
     setPlayerId(d.playerId);

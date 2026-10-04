@@ -40,8 +40,9 @@ export async function POST(req) {
     stage: next.stage,
     winners: next.winners,
     status: next.finished ? 'finished' : 'playing',
-  }).eq('id', room.id).eq('drawn_count', room.drawn_count).select().single();
+  }).eq('id', room.id).eq('drawn_count', room.drawn_count).eq('stage', room.stage).eq('status', room.status)
+    .select().maybeSingle();
 
-  if (!updated) return json({ error: 'Giro duplicado, intenta de nuevo.' }, 409);
+  if (!updated) return json({ error: 'Alguien cantó bingo justo ahora. Revisa y vuelve a girar.' }, 409);
   return json({ number, room: updated });
 }
