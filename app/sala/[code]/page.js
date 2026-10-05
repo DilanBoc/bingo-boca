@@ -71,6 +71,7 @@ export default function Sala() {
   const [toast, setToast] = useState('');
   const [auto, setAuto] = useState(false);
   const [sound, setSound] = useState(false);
+  const [removed, setRemoved] = useState(false);
   const lastSpoken = useRef(null);
 
   useEffect(() => {
@@ -84,9 +85,13 @@ export default function Sala() {
     supabase().from('cards').select('id, numero, grid').eq('player_id', playerId).order('numero')
       .then(({ data }) => {
         if (data?.length) setCards(data);
-        else { localStorage.removeItem(storeKey); setPlayerId(null); }
+        else {
+          localStorage.removeItem(storeKey);
+          setCards((prev) => { if (prev.length) setRemoved(true); return []; });
+          setPlayerId(null);
+        }
       });
-  }, [playerId, storeKey, room?.round]);
+  }, [playerId, storeKey, room?.round, room?.roster_version]);
 
   // Voz opcional también en el celular
   const last = room?.drawn?.[room.drawn.length - 1];
@@ -106,6 +111,7 @@ export default function Sala() {
     if (!r.ok) return setErr(d.error);
     if (d.capped) flash(`Solo quedaban ${d.capped} cartones disponibles en esta sala.`);
     localStorage.setItem(storeKey, d.playerId);
+    setRemoved(false);
     setCards(d.cards);
     setPlayerId(d.playerId);
   }
@@ -144,6 +150,11 @@ export default function Sala() {
           <p className="muted" style={{ margin: 0 }}>Sala {room.code}</p>
           <h1 style={{ fontSize: 40, lineHeight: 1.05 }}>Entra al bingo</h1>
         </div>
+        {removed && (
+          <p className="lobby-note" style={{ margin: 0 }}>
+            El anfitrión te sacó de la sala. Si fue para corregir tus cartones, vuelve a entrar y elige la cantidad correcta.
+          </p>
+        )}
         <form onSubmit={join} style={{ display: 'grid', gap: 16 }}>
           <label className="field"><span>Tu nombre</span>
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={24} autoFocus required />

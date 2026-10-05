@@ -68,3 +68,6 @@ create unique index if not exists cards_room_grid_uq on cards(room_id, grid);
 -- v5: un premio por persona y cartones nuevos por ronda (ver migración premio_por_persona_y_cartones_nuevos)
 alter table rooms add column if not exists one_prize_each boolean not null default true;
 -- funciones: random_bingo_grid(), regenerate_room_cards(uuid)
+
+-- v6: sacar jugadores
+alter table rooms add column if not exists roster_version int not null default 0;

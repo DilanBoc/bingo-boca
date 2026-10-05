@@ -37,7 +37,7 @@ export default function Host() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'players', filter: `room_id=eq.${room.id}` }, () => setTimeout(load, 800))
       .subscribe();
     return () => { clearInterval(t); supabase().removeChannel(ch); };
-  }, [room?.id]);
+  }, [room?.id, room?.roster_version]);
 
   // Anunciar ganadores nuevos y bingos falsos con voz
   useEffect(() => {
@@ -244,6 +244,9 @@ export default function Host() {
                 <li key={p.id}>
                   <span className="pname">{p.name}{won.length > 0 && <span className="trophy" title="Ganó"> 🏆</span>}</span>
                   <span className="pcount">{p.cards} {p.cards === 1 ? 'cartón' : 'cartones'}</span>
+                  <button className="kick" aria-label={`Sacar a ${p.name}`} title="Sacar de la sala"
+                    onClick={() => confirm(`¿Sacar a ${p.name} de la sala? Se borran sus ${p.cards} ${p.cards === 1 ? 'cartón' : 'cartones'}. Podrá volver a entrar escaneando el QR.`)
+                      && settings({ removePlayer: p.id })}>✕</button>
                 </li>
               );
             })}

@@ -110,7 +110,7 @@ h1, h2, .display { font-family: var(--f-display), sans-serif; font-weight: 400; 
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .players li { display: flex; justify-content: space-between; gap: 10px; align-items: center;
   background: var(--felt-2); border-radius: 10px; padding: 10px 14px; }
-.players .pname { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.players .pname { flex: 1; min-width: 0; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .players .pcount { color: rgba(246,244,236,.75); font-size: 15px; flex: none; }
 
 .btn.ghost.danger { color: #FFB4B4; box-shadow: inset 0 0 0 2px rgba(255,180,180,.5); }
@@ -120,3 +120,7 @@ h1, h2, .display { font-family: var(--f-display), sans-serif; font-weight: 400; 
 .card-head .reroll:disabled { opacity: .5; }
 .lobby-note { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;
   background: var(--felt-2); border-radius: 12px; padding: 12px 14px; font-size: 15px; }
+
+.players .kick { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 0; padding: 0;
+  background: transparent; color: rgba(246,244,236,.6); font-size: 15px; font-weight: 800; }
+.players .kick:hover, .players .kick:focus-visible { background: rgba(255,180,180,.15); color: #FFB4B4; }

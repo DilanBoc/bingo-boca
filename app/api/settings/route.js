@@ -3,7 +3,7 @@ import { PATTERNS } from '@/lib/bingo';
 
 export async function POST(req) {
   const body = await req.json();
-  const { code, secret, pattern, pattern2, autoCheck, onePrizeEach, reset, newCards, close } = body;
+  const { code, secret, pattern, pattern2, autoCheck, onePrizeEach, reset, newCards, close, removePlayer } = body;
   const db = admin();
   const room = await getRoom(db, code);
   if (!room) return json({ error: 'Sala no encontrada.' }, 404);
@@ -14,6 +14,16 @@ export async function POST(req) {
     return json({ room: data });
   }
   if (room.status === 'closed') return json({ error: 'Este bingo ya terminó.' }, 409);
+
+  // Sacar a una persona: se borran ella y sus cartones; puede volver a entrar con el QR.
+  if (removePlayer) {
+    const { data: gone } = await db.from('players').delete()
+      .eq('id', removePlayer).eq('room_id', room.id).select('id');
+    if (!gone?.length) return json({ error: 'Esa persona ya no está en la sala.' }, 404);
+    const { data } = await db.from('rooms').update({ roster_version: (room.roster_version || 0) + 1 })
+      .eq('id', room.id).select().single();
+    return json({ room: data });
+  }
 
   const changingPrizes = pattern !== undefined || 'pattern2' in body;
   if (changingPrizes && room.drawn_count > 0 && !reset)
