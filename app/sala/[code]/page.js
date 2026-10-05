@@ -22,14 +22,21 @@ function useMarks(cardId, round) {
   return [marks, toggle];
 }
 
-function Card({ card, room, auto, onClaim }) {
+function Card({ card, room, auto, onClaim, onReroll, rerolling }) {
   const [marks, toggle] = useMarks(card.id, room.round);
   const drawn = new Set(room.drawn);
   const pat = activePattern(room);
   const target = previewCells(pat);
   return (
     <div className="card">
-      <div className="card-head"><span>Cartón {card.numero}</span></div>
+      <div className="card-head">
+        <span>Cartón {card.numero}</span>
+        {room.drawn_count === 0 && (
+          <button className="reroll" disabled={rerolling} onClick={() => onReroll(card.id)}>
+            {rerolling ? 'Cambiando…' : '🔄 Cambiar números'}
+          </button>
+        )}
+      </div>
       <div className="grid5">
         {LETTERS.map((l) => <div key={l} className={`hd c-${l}`}>{l}</div>)}
         {card.grid.map((n, i) => {
@@ -101,6 +108,17 @@ export default function Sala() {
     localStorage.setItem(storeKey, d.playerId);
     setCards(d.cards);
     setPlayerId(d.playerId);
+  }
+
+  const [rerolling, setRerolling] = useState(null);
+  async function reroll(cardId) {
+    setRerolling(cardId || 'all');
+    const r = await fetch('/api/reroll', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, playerId, cardId }) });
+    const d = await r.json();
+    setRerolling(null);
+    if (!r.ok) return flash(d.error);
+    setCards(d.cards);
+    flash(cardId ? 'Números nuevos para ese cartón.' : 'Todos tus cartones tienen números nuevos.');
   }
 
   async function claim(card) {
@@ -182,6 +200,17 @@ export default function Sala() {
         </div>
       )}
 
+      {room.drawn_count === 0 && room.status !== 'closed' && cards.length > 0 && (
+        <div className="lobby-note">
+          <span>¿No te gustan tus números? Puedes cambiarlos hasta que salga la primera balota.</span>
+          {cards.length > 1 && (
+            <button className="btn ghost" style={{ padding: '8px 16px' }} disabled={!!rerolling} onClick={() => reroll(null)}>
+              Cambiar todos
+            </button>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input type="checkbox" checked={auto} onChange={(e) => { setAuto(e.target.checked); localStorage.setItem('bingo-auto', e.target.checked ? '1' : '0'); }} />
@@ -194,7 +223,10 @@ export default function Sala() {
       </div>
 
       <div style={{ display: 'grid', gap: 18 }}>
-        {cards.map((c) => <Card key={c.id} card={c} room={room} auto={auto} onClaim={claim} />)}
+        {cards.map((c) => (
+          <Card key={c.id + c.grid.join('-')} card={c} room={room} auto={auto} onClaim={claim}
+            onReroll={reroll} rerolling={rerolling === c.id || rerolling === 'all'} />
+        ))}
       </div>
       {toast && <div className="toast" role="status">{toast}</div>}
     </main>
