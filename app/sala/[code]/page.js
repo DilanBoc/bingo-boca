@@ -79,7 +79,7 @@ export default function Sala() {
         if (data?.length) setCards(data);
         else { localStorage.removeItem(storeKey); setPlayerId(null); }
       });
-  }, [playerId, storeKey]);
+  }, [playerId, storeKey, room?.round]);
 
   // Voz opcional también en el celular
   const last = room?.drawn?.[room.drawn.length - 1];
@@ -107,7 +107,7 @@ export default function Sala() {
     const r = await fetch('/api/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, cardId: card.id, playerId }) });
     const d = await r.json();
     if (!r.ok) return flash(d.error);
-    flash(d.valid ? '¡Bingo verificado!' : `Todavía no: al cartón ${card.numero} le faltan balotas.`);
+    flash(d.valid ? '¡Bingo verificado!' : d.reason || `Todavía no: al cartón ${card.numero} le faltan balotas.`);
   }
 
   if (missing) return <main className="wrap"><h1>Esta sala ya no existe</h1><p className="muted">El bingo terminó o el código no es correcto. Revisa con quien está cantando.</p></main>;

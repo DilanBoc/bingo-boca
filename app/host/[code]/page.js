@@ -90,6 +90,14 @@ export default function Host() {
     if (d?.room) setRoom(d.room);
   }
 
+  const [busy, setBusy] = useState(false);
+  async function newRound(newCards) {
+    setBusy(true);
+    await settings({ reset: true, newCards });
+    setBusy(false);
+    speak(newCards ? 'Nueva ronda con cartones nuevos' : 'Nueva ronda con los mismos cartones');
+  }
+
   if (missing) return <main className="wrap"><h1>Esta sala no existe</h1><p className="muted">Vuelve al inicio y crea una nueva.</p></main>;
   if (!room || secret === null) return <main className="wrap"><p className="muted">Cargando sala…</p></main>;
   if (room.status === 'closed') return (
@@ -138,8 +146,12 @@ export default function Host() {
           ))}
           {!finished && second && <p style={{ margin: '6px 0 0', fontWeight: 800 }}>Seguimos: ahora se juega por {PATTERNS[room.pattern2].label}</p>}
           {finished && (
-            <button className="btn" style={{ marginTop: 10, background: 'var(--ink)', color: 'var(--chalk)' }}
-              onClick={() => settings({ reset: true })}>Empezar ronda nueva</button>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 12 }}>
+              <button className="btn" style={{ background: 'var(--ink)', color: 'var(--chalk)' }} disabled={busy}
+                onClick={() => newRound(false)}>Jugar otra vez · mismos cartones</button>
+              <button className="btn" style={{ background: 'var(--chalk)', color: 'var(--ink)' }} disabled={busy}
+                onClick={() => newRound(true)}>Jugar otra vez · cartones nuevos</button>
+            </div>
           )}
         </div>
       )}
@@ -191,6 +203,13 @@ export default function Host() {
               </div>
             </label>
           )}
+          {second && (
+            <label style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <input type="checkbox" checked={room.one_prize_each} disabled={!canPick}
+                onChange={(e) => settings({ onePrizeEach: e.target.checked })} style={{ width: 22, height: 22 }} />
+              <span>Un premio por persona <span className="muted">(quien gane el primero no puede ganar el segundo)</span></span>
+            </label>
+          )}
           {!canPick && <span className="muted" style={{ fontSize: 14, marginTop: -8 }}>Los premios se cambian al empezar una ronda nueva.</span>}
 
           <label style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -201,7 +220,7 @@ export default function Host() {
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             {room.status === 'playing' && (
               <button className="btn ghost"
-                onClick={() => confirm('¿Reiniciar la ronda? Se borran las balotas que han salido.') && settings({ reset: true })}>
+                onClick={() => confirm('¿Reiniciar la ronda? Se borran las balotas que han salido y se juega con los mismos cartones.') && settings({ reset: true })}>
                 Reiniciar ronda
               </button>
             )}

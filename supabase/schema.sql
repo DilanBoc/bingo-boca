@@ -64,3 +64,7 @@ alter table rooms add column if not exists stage int not null default 1;
 -- v4: sin números ni cartones repetidos dentro de una sala
 create unique index if not exists cards_room_numero_uq on cards(room_id, numero);
 create unique index if not exists cards_room_grid_uq on cards(room_id, grid);
+
+-- v5: un premio por persona y cartones nuevos por ronda (ver migración premio_por_persona_y_cartones_nuevos)
+alter table rooms add column if not exists one_prize_each boolean not null default true;
+-- funciones: random_bingo_grid(), regenerate_room_cards(uuid)

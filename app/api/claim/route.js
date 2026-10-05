@@ -1,5 +1,5 @@
 import { admin, getRoom, json } from '@/lib/supabaseAdmin';
-import { resolveStages, isWinner, activePattern } from '@/lib/bingo';
+import { resolveStages, isWinner, activePattern, hasSecondPrize } from '@/lib/bingo';
 
 export async function POST(req) {
   const { code, cardId, playerId } = await req.json();
@@ -14,6 +14,18 @@ export async function POST(req) {
     return json({ error: 'Ese cartón no es tuyo.' }, 403);
 
   const name = card.players?.name || 'Jugador';
+
+  // Un premio por persona: si ya ganó el primero y hay otros que pueden ganar, no aplica al segundo.
+  const firstWinners = [...new Set(room.winners.filter((w) => (w.stage || 1) === 1).map((w) => w.playerId))];
+  let othersExist = true;
+  if (room.one_prize_each && hasSecondPrize(room)) {
+    let q = db.from('cards').select('id', { count: 'exact', head: true }).eq('room_id', room.id);
+    if (firstWinners.length) q = q.not('player_id', 'in', `(${firstWinners.join(',')})`);
+    const { count } = await q;
+    othersExist = count > 0;
+    if (room.stage === 2 && firstWinners.includes(card.player_id) && othersExist)
+      return json({ valid: false, reason: 'Ya ganaste el primer premio. El segundo es para otra persona.' });
+  }
   const valid = isWinner(card.grid, room.drawn, activePattern(room));
   const claim = { name, numero: card.numero, valid, at: Date.now() };
 
@@ -29,7 +41,7 @@ export async function POST(req) {
     if (current.status === 'finished' || current.status === 'closed') break;
     if (current.winners.some((w) => w.cardId === card.id && w.stage === (current.stage || 1))) break;
     if (!isWinner(card.grid, current.drawn, activePattern(current))) break;
-    const next = resolveStages(current, current.drawn, [{ grid: card.grid, info }]);
+    const next = resolveStages(current, current.drawn, [{ grid: card.grid, info }], { fallbackToAll: !othersExist });
     const { data: ok } = await db.from('rooms').update({
       stage: next.stage,
       winners: next.winners,
