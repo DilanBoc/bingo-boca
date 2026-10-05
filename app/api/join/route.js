@@ -25,6 +25,12 @@ export async function POST(req) {
   if (free <= 0) return json({ error: `Ya no quedan cartones en esta sala (máximo ${MAX_CARDS_ROOM}).` }, 409);
   const take = Math.min(n, free);
 
+  const { data: same } = await db.from('players').select('id').eq('room_id', room.id).ilike('name', clean.replace(/[%_\\]/g, '\\$&'));
+  if (same?.length) return json({
+    error: `Ya hay alguien llamado "${clean}" en la sala. Si quieres más cartones, usa "Agregar cartón" en el celular donde entraste. Si eres otra persona, agrega tu apellido o una inicial.`,
+    duplicate: true,
+  }, 409);
+
   const { data: player, error } = await db.from('players')
     .insert({ room_id: room.id, name: clean }).select().single();
   if (error) return json({ error: 'No se pudo entrar a la sala.' }, 500);

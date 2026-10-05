@@ -1,4 +1,5 @@
 import { admin, getRoom, json } from '@/lib/supabaseAdmin';
+import { recordRound } from '@/lib/rounds';
 import { resolveStages, isWinner, activePattern, hasSecondPrize } from '@/lib/bingo';
 
 export async function POST(req) {
@@ -48,8 +49,8 @@ export async function POST(req) {
       status: next.finished ? 'finished' : 'playing',
       last_claim: claim,
     }).eq('id', room.id).eq('stage', current.stage).eq('status', current.status)
-      .eq('drawn_count', current.drawn_count).select('id').maybeSingle();
-    if (ok) break;
+      .eq('drawn_count', current.drawn_count).select('*').maybeSingle();
+    if (ok) { if (ok.status === 'finished') await recordRound(db, ok); break; }
     current = await getRoom(db, code);
   }
   return json({ valid });

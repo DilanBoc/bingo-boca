@@ -71,3 +71,8 @@ alter table rooms add column if not exists one_prize_each boolean not null defau
 
 -- v6: sacar jugadores
 alter table rooms add column if not exists roster_version int not null default 0;
+
+-- v7: historial de rondas, desempate, inicio de ronda (ver migración historial_desempate)
+alter table rooms add column if not exists tiebreak text not null default 'compartir';
+alter table rooms add column if not exists round_started_at timestamptz;
+-- tabla rounds: room_id (on delete set null), room_code, round, pattern, pattern2, tiebreak, winners, balls, players, cards, started_at, ended_at

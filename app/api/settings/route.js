@@ -3,7 +3,7 @@ import { PATTERNS } from '@/lib/bingo';
 
 export async function POST(req) {
   const body = await req.json();
-  const { code, secret, pattern, pattern2, autoCheck, onePrizeEach, reset, newCards, close, removePlayer } = body;
+  const { code, secret, pattern, pattern2, autoCheck, onePrizeEach, tiebreak, reset, newCards, close, removePlayer } = body;
   const db = admin();
   const room = await getRoom(db, code);
   if (!room) return json({ error: 'Sala no encontrada.' }, 404);
@@ -32,6 +32,16 @@ export async function POST(req) {
   const patch = {};
   if (pattern && PATTERNS[pattern]) patch.pattern = pattern;
   if ('pattern2' in body) patch.pattern2 = pattern2 && PATTERNS[pattern2] ? pattern2 : null;
+  const finalP1 = patch.pattern || room.pattern;
+  const finalP2 = 'pattern2' in patch ? patch.pattern2 : room.pattern2;
+  if (finalP2 && finalP2 === finalP1) {
+    if ('pattern2' in body) return json({ error: 'El segundo premio debe ser distinto al primero.' }, 409);
+    patch.pattern2 = null; // si cambian el primero al mismo del segundo, se quita el segundo
+  }
+  if (tiebreak && ['compartir', 'balota'].includes(tiebreak)) {
+    if (room.drawn_count > 0 && !reset) return json({ error: 'El desempate se elige antes de girar.' }, 409);
+    patch.tiebreak = tiebreak;
+  }
   if (typeof autoCheck === 'boolean') patch.auto_check = autoCheck;
   if (typeof onePrizeEach === 'boolean') {
     if (room.drawn_count > 0 && !reset) return json({ error: 'Esta regla se elige antes de girar.' }, 409);
@@ -42,7 +52,7 @@ export async function POST(req) {
     if (error) return json({ error: 'No se pudieron repartir cartones nuevos. Intenta otra vez.' }, 500);
   }
   if (reset) Object.assign(patch, {
-    drawn: [], drawn_count: 0, status: 'lobby', winners: [], last_claim: null, stage: 1, round: room.round + 1,
+    drawn: [], drawn_count: 0, status: 'lobby', winners: [], last_claim: null, stage: 1, round: room.round + 1, round_started_at: null,
   });
 
   const { data } = await db.from('rooms').update(patch).eq('id', room.id).select().single();

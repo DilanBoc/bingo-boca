@@ -1,6 +1,7 @@
 import { randomInt } from 'crypto';
 import { admin, getRoom, isHost, json } from '@/lib/supabaseAdmin';
 import { resolveStages } from '@/lib/bingo';
+import { recordRound } from '@/lib/rounds';
 
 export async function POST(req) {
   const { code, secret } = await req.json();
@@ -40,9 +41,11 @@ export async function POST(req) {
     stage: next.stage,
     winners: next.winners,
     status: next.finished ? 'finished' : 'playing',
+    ...(room.drawn_count === 0 ? { round_started_at: new Date().toISOString() } : {}),
   }).eq('id', room.id).eq('drawn_count', room.drawn_count).eq('stage', room.stage).eq('status', room.status)
     .select().maybeSingle();
 
   if (!updated) return json({ error: 'Alguien cantó bingo justo ahora. Revisa y vuelve a girar.' }, 409);
+  if (updated.status === 'finished') await recordRound(db, updated);
   return json({ number, room: updated });
 }
